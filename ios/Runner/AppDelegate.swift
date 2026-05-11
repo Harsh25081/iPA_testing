@@ -3,55 +3,105 @@ import Flutter
 import HaishinKit
 import AVFoundation
 
-@UIApplicationMain
+@main
 @objc class AppDelegate: FlutterAppDelegate {
-    private var rtmpConnection = RTMPConnection()
-    private var rtmpStream: RTMPStream!
+
+    private let rtmpConnection = RTMPConnection()
+    private var rtmpStream: RTMPStream?
 
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        let controller : FlutterViewController = window?.rootViewController as! FlutterViewController
-        let channel = FlutterMethodChannel(name: "flutter.native/rtmp", binaryMessenger: controller.binaryMessenger)
+
+        GeneratedPluginRegistrant.register(with: self)
+
+        guard let controller = window?.rootViewController as? FlutterViewController else {
+            return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+        }
+
+        let channel = FlutterMethodChannel(
+            name: "flutter.native/rtmp",
+            binaryMessenger: controller.binaryMessenger
+        )
 
         rtmpStream = RTMPStream(connection: rtmpConnection)
-        
-        channel.setMethodCallHandler({ (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
+
+        channel.setMethodCallHandler { [weak self] (call, result) in
+            guard let self = self else { return }
+
             switch call.method {
+
             case "startStream":
+
                 guard let args = call.arguments as? [String: Any],
                       let url = args["url"] as? String,
                       let key = args["key"] as? String else {
-                    result(FlutterError(code: "INVALID_ARGS", message: "Missing URL/Key", details: nil))
+
+                    result(
+                        FlutterError(
+                            code: "INVALID_ARGS",
+                            message: "Missing URL/Key",
+                            details: nil
+                        )
+                    )
                     return
                 }
+
                 self.setupAudio()
-                self.rtmpStream.attachAudio(AVCaptureDevice.default(for: .audio))
-                self.rtmpStream.attachCamera(AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back))
+
+                self.rtmpStream?.attachAudio(
+                    AVCaptureDevice.default(for: .audio)
+                )
+
+                self.rtmpStream?.attachCamera(
+                    AVCaptureDevice.default(
+                        .builtInWideAngleCamera,
+                        for: .video,
+                        position: .back
+                    )
+                )
+
                 self.rtmpConnection.connect(url)
-                self.rtmpStream.publish(key)
+                self.rtmpStream?.publish(key)
+
                 result("Streaming Started")
-                
+
             case "stopStream":
-                self.rtmpStream.close()
+
+                self.rtmpStream?.close()
                 self.rtmpConnection.close()
+
                 result("Streaming Stopped")
-                
+
             default:
                 result(FlutterMethodNotImplemented)
             }
-        })
+        }
 
-        GeneratedPluginRegistrant.register(with: self)
-        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+        return super.application(
+            application,
+            didFinishLaunchingWithOptions: launchOptions
+        )
     }
 
     private func setupAudio() {
+
         let session = AVAudioSession.sharedInstance()
+
         do {
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+
+            try session.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [
+                    .defaultToSpeaker,
+                    .allowBluetooth
+                ]
+            )
+
             try session.setActive(true)
+
         } catch {
             print("Audio Session Error: \(error)")
         }
